@@ -8,7 +8,6 @@ import (
 type ObjectBuilder struct {
 	container     *Container
 	instance      interface{}
-	instanceType  reflect.Type
 	name          string
 	priority      int
 	exportedTypes []reflect.Type
@@ -17,24 +16,24 @@ type ObjectBuilder struct {
 	isPrimary     bool // 新增：标记为主要实现
 }
 
-// newObjectBuilder creates a new object builder
+// newObjectBuilder creates a new ObjectBuilder
 func newObjectBuilder(container *Container, instance interface{}) *ObjectBuilder {
 	instanceType := reflect.TypeOf(instance)
 
-	// Generate default name from full type name
-	defaultName := instanceType.String()
-	if instanceType.Kind() == reflect.Ptr {
-		defaultName = instanceType.Elem().String()
-	}
-
-	return &ObjectBuilder{
+	builder := &ObjectBuilder{
 		container:     container,
 		instance:      instance,
-		instanceType:  instanceType,
-		name:          defaultName,
-		priority:      0, // Default priority
-		exportedTypes: []reflect.Type{instanceType},
+		exportedTypes: []reflect.Type{instanceType}, // 默认导出自身类型
+		priority:      0,
+		isPrimary:     false,
 	}
+
+	// Check if instance implements Named interface
+	if named, ok := instance.(Named); ok {
+		builder.name = named.Name()
+	}
+
+	return builder
 }
 
 // Name sets the component name (must be unique)
@@ -67,8 +66,17 @@ func (b *ObjectBuilder) Primary() *ObjectBuilder {
 	return b
 }
 
-// register actually registers the component with the container
+// Register completes the component registration
 func (b *ObjectBuilder) register() error {
+	// Use type name as default if no name is set
+	if b.name == "" {
+		instanceType := reflect.TypeOf(b.instance)
+		if instanceType.Kind() == reflect.Ptr {
+			instanceType = instanceType.Elem()
+		}
+		b.name = instanceType.String()
+	}
+
 	info := &ComponentInfo{
 		Instance:      b.instance,
 		InstanceType:  reflect.TypeOf(b.instance),
@@ -77,5 +85,6 @@ func (b *ObjectBuilder) register() error {
 		ExportedTypes: b.exportedTypes,
 		IsPrimary:     b.isPrimary,
 	}
+
 	return b.container.registerComponent(info)
 }

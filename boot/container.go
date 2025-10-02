@@ -47,8 +47,9 @@ func (c *Container) registerComponent(info *ComponentInfo) error {
 	defer c.mu.Unlock()
 
 	// Check name uniqueness
-	if _, exists := c.componentsByName[info.Name]; exists {
-		return fmt.Errorf("component with name '%s' already registered", info.Name)
+	if existing, exists := c.componentsByName[info.Name]; exists {
+		return fmt.Errorf("component with name '%s' already registered: existing type %s, new type %s",
+			info.Name, existing.InstanceType, info.InstanceType)
 	}
 
 	// Register by name

@@ -15,6 +15,11 @@ type Stoppable interface {
 	Stop(ctx context.Context) error
 }
 
+// Named interface for components that provide their own name
+type Named interface {
+	Name() string
+}
+
 // Component represents a managed component with priority
 type Component interface {
 	Priority() int

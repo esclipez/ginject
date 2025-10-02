@@ -64,7 +64,7 @@ func (r *RedisService) Stop(ctx context.Context) error {
 // WebService with different autowiring scenarios
 type WebService struct {
 	// @Autowired - required by default
-	UserService interfaces.UserService `autowire:""`
+	UserService interfaces.UserService `autowire:"UserSrv"`
 
 	// @Autowired @Required - explicitly required
 	Database *DatabaseService `autowire:"required"`
@@ -161,8 +161,7 @@ func init() {
 	// Register UserService with interface export
 	boot.Object(services.NewUserService()).
 		Export((*interfaces.UserService)(nil)).
-		Priority(100).
-		Name("UserSrv")
+		Priority(100)
 
 	// Register Database service
 	boot.Object(NewDatabaseService()).Priority(50)

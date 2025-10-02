@@ -22,6 +22,10 @@ func (s *UserServiceImpl) Init(ctx context.Context) error {
 	return nil
 }
 
+func (s *UserServiceImpl) Name() string {
+	return "UserSrv"
+}
+
 func (s *UserServiceImpl) Start(ctx context.Context) error {
 	fmt.Println("[UserService] Starting...")
 	return nil
