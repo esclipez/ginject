@@ -18,10 +18,16 @@ type ComponentInfo struct {
 	IsPrimary     bool
 }
 
+type ExportedComponentsInfo struct {
+	ExportedType reflect.Type
+	Primary      *ComponentInfo
+	Components   []*ComponentInfo
+}
+
 // Container manages the IoC lifecycle
 type Container struct {
-	componentsByName map[string]*ComponentInfo
-	componentsByType map[reflect.Type]*ComponentInfo
+	componentByName  map[string]*ComponentInfo
+	componentsByType map[reflect.Type]*ExportedComponentsInfo
 	components       []*ComponentInfo
 	mu               sync.RWMutex
 	started          bool
@@ -30,8 +36,8 @@ type Container struct {
 // NewContainer creates a new IoC container
 func NewContainer() *Container {
 	return &Container{
-		componentsByName: make(map[string]*ComponentInfo),
-		componentsByType: make(map[reflect.Type]*ComponentInfo),
+		componentByName:  make(map[string]*ComponentInfo),
+		componentsByType: make(map[reflect.Type]*ExportedComponentsInfo),
 		components:       make([]*ComponentInfo, 0),
 	}
 }
@@ -47,13 +53,13 @@ func (c *Container) registerComponent(info *ComponentInfo) error {
 	defer c.mu.Unlock()
 
 	// Check name uniqueness
-	if existing, exists := c.componentsByName[info.Name]; exists {
+	if existing, exists := c.componentByName[info.Name]; exists {
 		return fmt.Errorf("component with name '%s' already registered: existing type %s, new type %s",
 			info.Name, existing.InstanceType, info.InstanceType)
 	}
 
 	// Register by name
-	c.componentsByName[info.Name] = info
+	c.componentByName[info.Name] = info
 	c.components = append(c.components, info)
 
 	return nil
@@ -64,7 +70,7 @@ func (c *Container) GetByName(name string) (interface{}, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	info, exists := c.componentsByName[name]
+	info, exists := c.componentByName[name]
 	if !exists {
 		return nil, fmt.Errorf("component '%s' not found", name)
 	}
@@ -80,7 +86,23 @@ func (c *Container) GetByType(componentType reflect.Type) (interface{}, error) {
 	if !exists {
 		return nil, fmt.Errorf("no component of type '%s' found", componentType)
 	}
-	return info.Instance, nil
+	return info.Primary.Instance, nil
+}
+
+// GetAllByType retrieves all components by type
+func (c *Container) GetAllByType(componentType reflect.Type) ([]interface{}, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	info, exists := c.componentsByType[componentType]
+	if !exists {
+		return nil, fmt.Errorf("no component of type '%s' found", componentType)
+	}
+	components := make([]interface{}, len(info.Components))
+	for i, component := range info.Components {
+		components[i] = component.Instance
+	}
+	return components, nil
 }
 
 // InjectDependencies performs dependency injection on all components
@@ -189,7 +211,7 @@ func (c *Container) resolveDependencyUnsafe(fieldType reflect.Type, qualifier st
 
 // getByNameUnsafe retrieves a component by name without locking
 func (c *Container) getByNameUnsafe(name string) (interface{}, error) {
-	info, exists := c.componentsByName[name]
+	info, exists := c.componentByName[name]
 	if !exists {
 		return nil, fmt.Errorf("component '%s' not found", name)
 	}
@@ -202,7 +224,7 @@ func (c *Container) getByTypeUnsafe(componentType reflect.Type) (interface{}, er
 	if !exists {
 		return nil, fmt.Errorf("no component of type '%s' found", componentType)
 	}
-	return info.Instance, nil
+	return info.Primary.Instance, nil
 }
 
 // Initialize runs init phase in descending priority order (higher priority first)
@@ -281,7 +303,7 @@ func (c *Container) getSortedComponents(ascending bool) []*ComponentInfo {
 // validateTypeRegistrations validates type mappings and resolves conflicts
 func (c *Container) validateTypeRegistrations() error {
 	// Clear existing type mappings
-	c.componentsByType = make(map[reflect.Type]*ComponentInfo)
+	c.componentsByType = make(map[reflect.Type]*ExportedComponentsInfo)
 
 	// Group components by exported type
 	typeGroups := make(map[reflect.Type][]*ComponentInfo)
@@ -296,7 +318,11 @@ func (c *Container) validateTypeRegistrations() error {
 	for exportedType, components := range typeGroups {
 		if len(components) == 1 {
 			// Single component - always use it
-			c.componentsByType[exportedType] = components[0]
+			c.componentsByType[exportedType] = &ExportedComponentsInfo{
+				ExportedType: exportedType,
+				Primary:      components[0],
+				Components:   components,
+			}
 			continue
 		}
 
@@ -329,7 +355,11 @@ func (c *Container) validateTypeRegistrations() error {
 		}
 
 		// Exactly one primary - use it
-		c.componentsByType[exportedType] = primaryComponents[0]
+		c.componentsByType[exportedType] = &ExportedComponentsInfo{
+			ExportedType: exportedType,
+			Primary:      primaryComponents[0],
+			Components:   components,
+		}
 	}
 
 	return nil

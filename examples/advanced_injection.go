@@ -106,6 +106,11 @@ func (a *AdvancedService) Start(ctx context.Context) error {
 		fmt.Println("[AdvancedService] Maybe logger not injected")
 	}
 
+	loggers, err := boot.GetAllByType((*Logger)(nil))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("[AdvancedService] Number of work loggers:%d\n", len(loggers))
 	return nil
 }
 

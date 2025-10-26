@@ -29,7 +29,20 @@ func GetByName(name string) (interface{}, error) {
 
 // GetByType retrieves a component by type from the default container
 func GetByType(componentType interface{}) (interface{}, error) {
-	return defaultContainer.GetByType(reflect.TypeOf(componentType))
+	t := reflect.TypeOf(componentType)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem() // Get the interface type
+	}
+	return defaultContainer.GetByType(t)
+}
+
+// GetAllByType retrieves all components by type from the default container
+func GetAllByType(componentType interface{}) ([]interface{}, error) {
+	t := reflect.TypeOf(componentType)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem() // Get the interface type
+	}
+	return defaultContainer.GetAllByType(t)
 }
 
 // Shutdown triggers graceful shutdown of the application
