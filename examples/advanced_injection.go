@@ -47,6 +47,22 @@ func (c *DebuggerLogger) Log(message string) {
 	fmt.Printf("[DebuggerLogger] %s\n", message)
 }
 
+type StructComponent struct {
+	// Another specific qualifier
+	ConsoleLogger Logger `autowire:"ConsoleLog"`
+
+	// Required dependency (explicit)
+	RequiredLogger Logger `autowire:"required"`
+}
+
+type PointerComponent struct {
+	// Optional dependency - won't fail if not found
+	OptionalLogger Logger `autowire:"optional"`
+
+	// Alternative optional syntax
+	MaybeLogger *FileLogger `autowire:"?"`
+}
+
 // AdvancedService Service demonstrating different autowiring patterns
 type AdvancedService struct {
 	// Default autowiring - injects by type
@@ -55,27 +71,21 @@ type AdvancedService struct {
 	// Specific qualifier - injects component by name
 	FileLogger Logger `autowire:"FileLog"`
 
-	// Another specific qualifier
-	ConsoleLogger Logger `autowire:"ConsoleLog"`
+	StructComponent
 
-	// Required dependency (explicit)
-	RequiredLogger Logger `autowire:"required"`
-
-	// Optional dependency - won't fail if not found
-	OptionalLogger Logger `autowire:"optional"`
-
-	// Alternative optional syntax
-	MaybeLogger *FileLogger `autowire:"?"`
+	*PointerComponent
 
 	// Won't fail if "NonExistentLogger" doesn't exist
 	SpecificOptional Logger `autowire:"NonExistentLogger,optional"`
 }
 
 func NewAdvancedService() *AdvancedService {
-	return &AdvancedService{}
+	return &AdvancedService{
+		PointerComponent: &PointerComponent{},
+	}
 }
 
-func (a *AdvancedService) Start(ctx context.Context) error {
+func (a *AdvancedService) Start(_ context.Context) error {
 	fmt.Println("[AdvancedService] Testing different injection patterns:")
 
 	if a.DefaultLogger != nil {

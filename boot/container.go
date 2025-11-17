@@ -155,8 +155,41 @@ func (c *Container) injectComponentUnsafe(component interface{}) error {
 			if dependency != nil {
 				field.Set(reflect.ValueOf(dependency))
 			}
+		} else {
+			if err := c.injectFieldRecursively(field); err != nil {
+				return fmt.Errorf("failed to inject field %s: %w", fieldType.Name, err)
+			}
 		}
 	}
+	return nil
+}
+
+// injectFieldRecursively recursively checks and injects dependencies for a field
+func (c *Container) injectFieldRecursively(field reflect.Value) error {
+	// If field is not settable or invalid, return directly
+	if !field.CanSet() || !field.IsValid() {
+		return nil
+	}
+
+	// Handle pointer types
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			// If it's a nil pointer, skip injection
+			return nil
+		}
+		// Recursively inject the value pointed to by the pointer
+		return c.injectComponentUnsafe(field.Interface())
+	}
+
+	// Handle struct types
+	if field.Kind() == reflect.Struct {
+		// Get the pointer to the struct for injection
+		if !field.CanAddr() {
+			return nil
+		}
+		return c.injectComponentUnsafe(field.Addr().Interface())
+	}
+
 	return nil
 }
 
