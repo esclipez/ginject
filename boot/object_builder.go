@@ -74,7 +74,13 @@ func (b *ObjectBuilder) register() error {
 		if instanceType.Kind() == reflect.Ptr {
 			instanceType = instanceType.Elem()
 		}
-		b.name = instanceType.String()
+		pkgPath := instanceType.PkgPath()
+		typeName := instanceType.Name()
+		if pkgPath != "" {
+			b.name = pkgPath + "." + typeName
+		} else {
+			b.name = instanceType.String()
+		}
 	}
 
 	info := &ComponentInfo{
