@@ -56,12 +56,12 @@ func RunApplication() {
 	ctx := context.Background()
 
 	// Run the complete lifecycle
-	Info("=== Starting Application ===")
+	Info("ginject: starting application")
 	if err := defaultContainer.Run(ctx); err != nil {
-		Fatalf("Application startup failed: %v", err)
+		Fatalf("ginject: startup failed: %v", err)
 	}
 
-	Info("=== Application Started ===")
+	Info("ginject: application started")
 
 	// Wait for shutdown signal (either OS signal or programmatic shutdown)
 	sigChan := make(chan os.Signal, 1)
@@ -69,15 +69,15 @@ func RunApplication() {
 
 	select {
 	case <-sigChan:
-		Info("=== Received OS Signal ===")
+		Info("ginject: shutdown requested by OS signal")
 	case <-shutdownChan:
-		Info("=== Received Shutdown Signal ===")
+		Info("ginject: shutdown requested")
 	}
 
 	// Graceful shutdown
-	Info("=== Shutting Down Application ===")
+	Info("ginject: stopping application")
 	if err := defaultContainer.Stop(ctx); err != nil {
-		Errorf("Shutdown error: %v", err)
+		Errorf("ginject: shutdown failed: %v", err)
 	}
-	Info("=== Application Stopped ===")
+	Info("ginject: application stopped")
 }

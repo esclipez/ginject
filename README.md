@@ -12,6 +12,7 @@ Inspired by [go-spring](https://github.com/go-spring/go-spring), Ginject is a si
 - **Priority Control**: Configure component startup/shutdown order
 - **Primary Components**: Resolve ambiguity when multiple components implement the same interface
 - **Optional Dependencies**: Support for optional autowiring with graceful fallback
+- **Isolated Containers**: Use the default container or create independent containers with `NewContainer`
 
 ## Quick Start
 
@@ -68,7 +69,6 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func main() {
-    // Register components with fluent API
     boot.Object(&ConsoleLogger{}).
         Export((*Logger)(nil)).
         Name("console-logger")
@@ -79,12 +79,36 @@ func main() {
 
     boot.Object(&App{})
 
-    // Start the application
     boot.RunApplication()
 }
 ```
 
+`RunApplication` starts the default container and then waits for `SIGINT`, `SIGTERM`, or a call to `boot.Shutdown()`.
+
 ### Advanced Features
+
+#### Default Container vs Custom Containers
+
+The package-level API uses a default container:
+
+```go
+boot.Object(&ConsoleLogger{}).Export((*Logger)(nil))
+boot.RunApplication()
+```
+
+For tests, libraries, or multiple isolated applications in the same process, create your own container:
+
+```go
+container := boot.NewContainer()
+container.Object(&ConsoleLogger{}).Export((*Logger)(nil))
+
+if err := container.Run(context.Background()); err != nil {
+    panic(err)
+}
+defer container.Stop(context.Background())
+```
+
+Register all objects before `Run` or `Start`. Once a container starts, registration is sealed and later calls to `Object` panic.
 
 #### Multiple Implementations with Primary
 
@@ -107,6 +131,7 @@ type Service struct {
     Logger    Logger    `autowire:""`           // Required
     Cache     Cache     `autowire:"optional"`   // Optional
     Metrics   Metrics   `autowire:"?"`          // Optional (short form)
+    AuditLog  Logger    `autowire:"audit,optional"`
 }
 ```
 
@@ -135,9 +160,35 @@ boot.Object(&DatabaseService{}).
     Name("database")
 ```
 
+Lifecycle order:
+
+1. Register pending objects
+2. Validate exported types and primary selections
+3. Inject dependencies
+4. Run `Init` methods from high priority to low priority
+5. Run `Start` methods from high priority to low priority
+6. Run `Stop` methods from low priority to high priority
+
+#### Runtime Logs
+
+The default `RunApplication` lifecycle logs use a compact `ginject:` prefix:
+
+```text
+ginject: starting application
+ginject: application started
+ginject: shutdown requested
+ginject: stopping application
+ginject: application stopped
+```
+
+When shutdown comes from an OS signal, the shutdown request message is `ginject: shutdown requested by OS signal`.
+
+Use `boot.SetLogger` to replace the default logger.
+
 ## Documentation
 
-For detailed documentation, examples, and best practices, see the [docs](./docs) directory.
+- [Autowiring Guide](./docs/autowiring_guide.md)
+- [Container Lifecycle](./docs/container_lifecycle.md)
 
 ## Acknowledgments
 

@@ -34,19 +34,48 @@ type MyService struct {
 | `"optional"` | Optional, inject by type if available | `@Autowired(required=false)` |
 | `"?"` | Optional (alternative syntax) | `@Autowired(required=false)` |
 | `"ComponentName"` | Required, inject specific component by name | `@Autowired @Qualifier("ComponentName")` |
+| `"ComponentName,optional"` | Optional, inject specific component by name if available | `@Autowired(required=false) @Qualifier("ComponentName")` |
 
 ### Error Handling
 
 - **Required dependencies**: Application fails to start if not found
 - **Optional dependencies**: Field remains nil if not found, no error
 - **Type mismatch**: Error if qualified component doesn't match field type
+- **Invalid exports**: Registration fails if `Export` names a type the component cannot be assigned to
+- **Ambiguous exports**: If multiple components export the same type, mark exactly one with `Primary`
+
+### Exported Types
+
+Each component is exported as its concrete type by default. Use `Export` to make it available through an interface:
+
+```go
+type Logger interface {
+    Log(message string)
+}
+
+type ConsoleLogger struct{}
+
+func (l *ConsoleLogger) Log(message string) {}
+
+boot.Object(&ConsoleLogger{}).Export((*Logger)(nil))
+```
+
+`Export` validates assignability during registration. This fails during `Run`:
+
+```go
+type Metrics interface {
+    Count(name string)
+}
+
+boot.Object(&ConsoleLogger{}).Export((*Metrics)(nil))
+```
 
 ### Examples
 
 ```go
 // Multiple logger implementations
-boot.Object(NewFileLogger()).Export((*Logger)(nil)).Name("FileLog").Primary()
-boot.Object(NewConsoleLogger()).Export((*Logger)(nil)).Name("ConsoleLog")
+boot.Object(NewFileLogger()).Export((*Logger)(nil)).Name("FileLog")
+boot.Object(NewConsoleLogger()).Export((*Logger)(nil)).Name("ConsoleLog").Primary()
 
 type Service struct {
     // Injects primary Logger
@@ -59,3 +88,19 @@ type Service struct {
     DebugLogger Logger `autowire:"DebugLog,optional"`
 }
 ```
+
+### Nested Structs
+
+Ginject also scans exported nested structs and non-nil pointers for `autowire` fields:
+
+```go
+type Dependencies struct {
+    Logger Logger `autowire:""`
+}
+
+type Service struct {
+    Dependencies
+}
+```
+
+Nil pointer fields are skipped unless the pointer field itself has an `autowire` tag.
