@@ -10,16 +10,12 @@ import (
 
 var (
 	defaultContainer = NewContainer()
-	pendingBuilders  []*ObjectBuilder // Pending builders to be registered
 	shutdownChan     = make(chan struct{}, 1)
 )
 
 // Object provides global access to component registration
 func Object(instance interface{}) *ObjectBuilder {
-	builder := defaultContainer.Object(instance)
-	// Don't register immediately, add to pending list instead
-	pendingBuilders = append(pendingBuilders, builder)
-	return builder
+	return defaultContainer.Object(instance)
 }
 
 // GetByName retrieves a component by name from the default container

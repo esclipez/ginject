@@ -29,7 +29,10 @@ type Container struct {
 	componentByName  map[string]*ComponentInfo
 	componentsByType map[reflect.Type]*ExportedComponentsInfo
 	components       []*ComponentInfo
+	pendingBuilders  []*ObjectBuilder
 	mu               sync.RWMutex
+	lifecycleMu      sync.Mutex
+	sealed           bool
 	started          bool
 }
 
@@ -39,12 +42,23 @@ func NewContainer() *Container {
 		componentByName:  make(map[string]*ComponentInfo),
 		componentsByType: make(map[reflect.Type]*ExportedComponentsInfo),
 		components:       make([]*ComponentInfo, 0),
+		pendingBuilders:  make([]*ObjectBuilder, 0),
 	}
 }
 
 // Object starts the fluent API for component registration
 func (c *Container) Object(instance interface{}) *ObjectBuilder {
-	return newObjectBuilder(c, instance)
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+	if c.sealed {
+		panic("cannot register component after container has started")
+	}
+
+	builder := newObjectBuilder(c, instance)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pendingBuilders = append(c.pendingBuilders, builder)
+	return builder
 }
 
 // registerComponent adds a component to the container
@@ -276,9 +290,13 @@ func (c *Container) Initialize(ctx context.Context) error {
 
 // Start runs startup phase in descending priority order (higher priority first)
 func (c *Container) Start(ctx context.Context) error {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+
 	if c.started {
 		return fmt.Errorf("container already started")
 	}
+	c.sealed = true
 
 	components := c.getSortedComponents(false) // descending order
 
@@ -296,6 +314,9 @@ func (c *Container) Start(ctx context.Context) error {
 
 // Stop runs shutdown phase in ascending priority order (lower priority first)
 func (c *Container) Stop(ctx context.Context) error {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+
 	if !c.started {
 		return nil
 	}
@@ -427,12 +448,19 @@ func (c *Container) Run(ctx context.Context) error {
 
 // registerPendingBuilders registers all pending ObjectBuilders
 func (c *Container) registerPendingBuilders() error {
+	c.lifecycleMu.Lock()
+	c.sealed = true
+
+	c.mu.Lock()
+	pendingBuilders := c.pendingBuilders
+	c.pendingBuilders = nil
+	c.mu.Unlock()
+	c.lifecycleMu.Unlock()
+
 	for _, builder := range pendingBuilders {
 		if err := builder.register(); err != nil {
 			return err
 		}
 	}
-	// Clear pending builders after registration
-	pendingBuilders = nil
 	return nil
 }
