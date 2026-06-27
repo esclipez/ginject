@@ -1,6 +1,7 @@
 package boot
 
 import (
+	"fmt"
 	"reflect"
 )
 
@@ -13,7 +14,8 @@ type ObjectBuilder struct {
 	exportedTypes []reflect.Type
 	nameSet       bool
 	prioritySet   bool
-	isPrimary     bool // 新增：标记为主要实现
+	isPrimary     bool
+	err           error
 }
 
 // newObjectBuilder creates a new ObjectBuilder
@@ -23,7 +25,7 @@ func newObjectBuilder(container *Container, instance interface{}) *ObjectBuilder
 	builder := &ObjectBuilder{
 		container:     container,
 		instance:      instance,
-		exportedTypes: []reflect.Type{instanceType}, // 默认导出自身类型
+		exportedTypes: []reflect.Type{instanceType},
 		priority:      0,
 		isPrimary:     false,
 	}
@@ -53,9 +55,20 @@ func (b *ObjectBuilder) Priority(priority int) *ObjectBuilder {
 // Export adds a type that this component should be registered for
 func (b *ObjectBuilder) Export(typePtr interface{}) *ObjectBuilder {
 	t := reflect.TypeOf(typePtr)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem() // Get the interface type
+	if t == nil {
+		b.err = fmt.Errorf("cannot export nil type")
+		return b
 	}
+	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Interface {
+		t = t.Elem()
+	}
+
+	instanceType := reflect.TypeOf(b.instance)
+	if !instanceType.AssignableTo(t) {
+		b.err = fmt.Errorf("component type %s cannot be exported as %s", instanceType, t)
+		return b
+	}
+
 	b.exportedTypes = append(b.exportedTypes, t)
 	return b
 }
@@ -68,6 +81,10 @@ func (b *ObjectBuilder) Primary() *ObjectBuilder {
 
 // Register completes the component registration
 func (b *ObjectBuilder) register() error {
+	if b.err != nil {
+		return b.err
+	}
+
 	// Use type name as default if no name is set
 	if b.name == "" {
 		instanceType := reflect.TypeOf(b.instance)

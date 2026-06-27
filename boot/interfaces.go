@@ -19,9 +19,3 @@ type Stoppable interface {
 type Named interface {
 	Name() string
 }
-
-// Component represents a managed component with priority
-type Component interface {
-	Priority() int
-	Name() string
-}

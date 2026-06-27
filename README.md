@@ -57,6 +57,16 @@ func (s *UserServiceImpl) GetUser(id string) string {
     return "User-" + id
 }
 
+type App struct {
+    UserService UserService `autowire:""`
+}
+
+func (a *App) Start(ctx context.Context) error {
+    user := a.UserService.GetUser("123")
+    fmt.Println("Result:", user)
+    return nil
+}
+
 func main() {
     // Register components with fluent API
     boot.Object(&ConsoleLogger{}).
@@ -66,17 +76,11 @@ func main() {
     boot.Object(&UserServiceImpl{}).
         Export((*UserService)(nil)).
         Name("user-service")
-    
-    go func() {
-        // Use components
-        userService, _ := boot.GetByType((*UserService)(nil))
-        user := userService.(UserService).GetUser("123")
-        fmt.Println("Result:", user)
-    }
+
+    boot.Object(&App{})
 
     // Start the application
     boot.RunApplication()
-
 }
 ```
 
